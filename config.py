@@ -24,3 +24,5 @@ cfg.render_only = False
 # "ret_mat(cam: >= 0 int) -> 3*7 [k, r, t]",
 # ! reconstruction will not be called if this is not None
 cfg.mat_func = ''
+
+cfg.skip_copy = True

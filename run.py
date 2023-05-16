@@ -7,6 +7,7 @@ from termcolor import colored
 import pycolmap
 import shutil
 from config import cfg
+import sys
 
 
 def clip(value: any, lower: any, upper: any) -> any:
@@ -16,6 +17,14 @@ def clip(value: any, lower: any, upper: any) -> any:
         return upper
     else:
         return value
+    
+# Disable
+def disable_print():
+    sys.stdout = open(os.devnull, 'w')
+
+# Restore
+def enable_print():
+    sys.stdout = sys.__stdout__
 
 
 def clean_point_cloud(
@@ -189,7 +198,7 @@ def main():
     annot['ims'] = ims
     print(colored(f'found {camera_count} cameras, {img_cnt} scenes', 'yellow'))
 
-    if not debug and not annot_only:
+    if not debug and not annot_only and not cfg.skip_copy:
 
         # create colmap image folder
         if os.path.exists('tmp'):
@@ -204,7 +213,7 @@ def main():
                 img = cv2.imread(folder_path + '/' + ims[i]['ims'][j])
                 if use_mask:
                     msk = cv2.imread((folder_path + '/' + ims[i]['ims'][j]).replace('images', 'masks'), cv2.IMREAD_GRAYSCALE)
-                    img *= msk[..., None]
+                    img[msk == 0] = 0
                 cv2.imwrite(f'tmp/{i:06d}/{j:06d}.jpg', img.astype(np.uint8))
 
     # first scene then camera
@@ -217,6 +226,7 @@ def main():
         if os.path.exists('colmap'):
             shutil.rmtree('colmap')
         os.makedirs('colmap')
+
     # colmap reconstruct
     for i in range(img_cnt):  # for each scene
 
