@@ -4,7 +4,7 @@ from yacs.config import CfgNode as CN
 cfg = CN()
 
 # main folder directory that includes images/ (and optionally masks/)
-cfg.folder = '/home/idarc/hgz/datasets/lego/lego'
+cfg.folder = '/home/idarc/hgz/datasets/blender/lego_dynamic'
 
 # default cs, if sc set False
 cfg.cs = True
@@ -18,9 +18,9 @@ cfg.clean_pts = True
 # generate annotation and render sanity check without reconstruction,
 # based on previously reconstructed results,
 # set this to true when reconstruction HAS been run
-cfg.render_only = True
+cfg.render_only = False
 
 # the path to the .py file that contains the function
 # "ret_mat(cam: >= 0 int) -> 3*7 [k, r, t]",
-# ! reconstruction will not be called if this is None
+# ! reconstruction will not be called if this is not None
 cfg.mat_func = ''

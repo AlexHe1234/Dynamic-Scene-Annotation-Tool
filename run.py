@@ -196,7 +196,8 @@ def main():
             shutil.rmtree('tmp')
         os.makedirs('tmp')
 
-        for i in range(img_cnt):  # for each scene
+        print(colored('copying scenes', 'yellow'))
+        for i in tqdm(range(img_cnt)):  # for each scene
             os.makedirs(f'tmp/{i:06d}')
             for j in range(camera_count):  # for each camera
                 # os.symlink(os.path.join(folder_path, ims[i][j]), f'tmp/{i:06d}/{j:06d}.jpg')
