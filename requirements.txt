@@ -1,0 +1,9 @@
+matplotlib==3.7.1
+numpy==1.24.3
+open3d==0.17.0
+opencv_python==4.7.0.72
+plotly==5.14.1
+pycolmap==0.4.0
+termcolor==2.3.0
+tqdm==4.65.0
+yacs==0.1.8
