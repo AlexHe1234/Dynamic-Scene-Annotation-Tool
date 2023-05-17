@@ -282,6 +282,7 @@ def main():
                 print(colored('camera extraction failed, restarting', 'red'))
                 logging.info('\tcamera extraction failed, restarting')
                 shutil.rmtree(output_path)
+                os.makedirs(output_path)
                 continue
         
         print(colored('camera paramters extraction success', 'green'))
