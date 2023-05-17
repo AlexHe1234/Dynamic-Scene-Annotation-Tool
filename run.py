@@ -139,6 +139,7 @@ def main():
     logging.basicConfig(filename='result/.log', 
                         format='%(asctime)s - %(message)s',
                         level=logging.INFO)
+    logging.info('start')
 
     if len(mat_func) > 0:
         annot_only = True
@@ -234,7 +235,7 @@ def main():
     t = []  # scene * camera * [3, 1]
     D = np.zeros((5, 1))
 
-    if not debug and not annot_only and cfg.begin_scene == 0:
+    if not debug and not annot_only and (cfg.begin_scene == 0):
         if os.path.exists('colmap'):
             shutil.rmtree('colmap')
             logging.info('removed colmap database folder')
@@ -251,32 +252,33 @@ def main():
             os.makedirs(output_path)
         # mvs_path = output_path + '/mvs'
         database_path = output_path + '/database.db'
-        if not debug and not annot_only and i >= cfg.begin_scene:
-            logging.info(f'\tstarting recontruction')
-            pycolmap.extract_features(database_path, image_dir)
-            pycolmap.match_exhaustive(database_path)
-            maps = pycolmap.incremental_mapping(database_path, image_dir, output_path)
-            maps[0].write(output_path)
-            print(colored(f'reconstruction complete for scene {i}', 'green'))
-            logging.info(f'\treconstruction complete')
-        # load reconstruction
-        try:
-            logging.info(f'\tstarting camera extraction')
-            if not annot_only:
-                reconstruction = pycolmap.Reconstruction(output_path)
-                print(reconstruction.summary())
-                if not os.path.exists('result'):
-                    os.makedirs('result')
-                reconstruction.export_PLY('result' + f'/mesh_raw_{i:06d}.ply')
-                reconstruction.write_text(output_path)
-                # post proc
-                exts = colmap_images_to_exts(output_path + '/images.txt', camera_count)
-                ixts = colmap_cameras_to_ixts(output_path + '/cameras.txt', camera_count)
-        except:
-            print(colored('reconstruction failed, restarting', 'red'))
-            logging.exception('\tcamera extraction failed, restarting')
-            i -= 1
-            continue
+        while True:
+            if not debug and not annot_only and i >= cfg.begin_scene:
+                logging.info(f'\tstarting recontruction')
+                pycolmap.extract_features(database_path, image_dir)
+                pycolmap.match_exhaustive(database_path)
+                maps = pycolmap.incremental_mapping(database_path, image_dir, output_path)
+                maps[0].write(output_path)
+                print(colored(f'reconstruction complete for scene {i}', 'green'))
+                logging.info(f'\treconstruction complete')
+            # load reconstruction
+            try:
+                if not annot_only:
+                    logging.info(f'\tstarting camera extraction')
+                    reconstruction = pycolmap.Reconstruction(output_path)
+                    print(reconstruction.summary())
+                    if not os.path.exists('result'):
+                        os.makedirs('result')
+                    reconstruction.export_PLY('result' + f'/mesh_raw_{i:06d}.ply')
+                    reconstruction.write_text(output_path)
+                    # post proc
+                    exts = colmap_images_to_exts(output_path + '/images.txt', camera_count)
+                    ixts = colmap_cameras_to_ixts(output_path + '/cameras.txt', camera_count)
+                break
+            except:
+                print(colored('camera extraction failed, restarting', 'red'))
+                logging.info('\tcamera extraction failed, restarting')
+                continue
         
         print(colored('camera paramters extraction success', 'green'))
         logging.info('\tcamera extraction complete')
