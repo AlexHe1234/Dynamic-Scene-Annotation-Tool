@@ -138,6 +138,37 @@ def colmap_images_to_exts(
     return exts
 
 
+def colmap_images_to_exts_unstrict(
+    images_path: str
+) -> np.ndarray:
+
+    a = open(images_path)
+    quads = np.zeros(4)
+    trans = np.zeros(3)
+    for _ in range(3):
+        _ = a.readline()
+    image_num = int(a.readline().split()[4][:-1])
+    exts = np.zeros((image_num, 3, 4))
+    index = []
+    for i in range(image_num):
+        line1 = a.readline().split()
+        quads[0] = float(line1[1])
+        quads[1] = float(line1[2])
+        quads[2] = float(line1[3])
+        quads[3] = float(line1[4])
+        trans[0] = float(line1[5])
+        trans[1] = float(line1[6])
+        trans[2] = float(line1[7])
+        j = int(line1[9].split('/')[-1][:-4])
+        # print(line1[0], f'{i + 1}')
+        # assert line1[0] == f'{i + 1}', 'The colmap file format is not support or corrupted'
+        exts[i, :3, :3] = quad2rot(quads)
+        exts[i, :3, 3] = trans
+        index.append(j)
+        a.readline()
+    return exts, index
+
+
 class Est:
     def __init__(self, total):
         self.total = total
@@ -497,14 +528,18 @@ def main():
                     reconstruction.export_PLY('result' + f'/mesh_transform/transform_{i:06d}.ply')
                     reconstruction.write_text(output_path)
                     # post proc
-                    exts = colmap_images_to_exts(output_path + '/images.txt', camera_count)
-                    ixts = colmap_cameras_to_ixts(output_path + '/cameras.txt', camera_count)
+                    if i == 0:
+                        exts = colmap_images_to_exts(output_path + '/images.txt', camera_count)
+                        ixts = colmap_cameras_to_ixts(output_path + '/cameras.txt', camera_count)
+                    else:
+                        exts, index = colmap_images_to_exts_unstrict(output_path + '/images.txt')
                 break
             except:
                 print(colored('camera extraction failed, restarting', 'red'))
                 logging.info('\tcamera extraction failed, restarting')
-                shutil.rmtree(output_path)
-                os.makedirs(output_path)
+                if not debug:
+                    shutil.rmtree(output_path)
+                    os.makedirs(output_path)
                 continue
 
         if count == cfg.fail_max:
@@ -539,7 +574,7 @@ def main():
             print(colored('annotation has been saved to "result/annot.npy"', 'green'))
             logging.info('\tannotation has been saved')
         else:  # move point cloud to match coordinate in first frame
-            rn, tn = get_point_transform(ext0, exts)
+            rn, tn = get_point_transform(ext0[index], exts)
             transform_point_cloud(f'result/mesh_raw/raw_{i:06d}.ply', rn, tn)
 
         est.stop()
