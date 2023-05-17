@@ -59,9 +59,9 @@ def colmap_images_to_exts(
     exts = np.zeros((image_num, 3, 4))
     quads = np.zeros(4)
     trans = np.zeros(3)
-    for i in range(4):
+    for _ in range(4):
         _ = a.readline()
-    for i in range(image_num):
+    for _ in range(image_num):
         line1 = a.readline().split()
         quads[0] = float(line1[1])
         quads[1] = float(line1[2])

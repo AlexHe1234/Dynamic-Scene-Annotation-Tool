@@ -25,4 +25,9 @@ cfg.render_only = False
 # ! reconstruction will not be called if this is not None
 cfg.mat_func = ''
 
+# skip copy only if the files in tmp
+# folder belongs to the current task
 cfg.skip_copy = True
+
+# select the scene to begin reconstruction with
+cfg.begin_scene = 0

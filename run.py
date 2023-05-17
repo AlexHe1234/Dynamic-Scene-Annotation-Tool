@@ -8,6 +8,7 @@ import pycolmap
 import shutil
 from config import cfg
 import sys
+import logging
 
 
 def clip(value: any, lower: any, upper: any) -> any:
@@ -135,9 +136,14 @@ def main():
     mat_func = cfg.mat_func
     clean_pts = cfg.clean_pts
 
+    logging.basicConfig(filename='result/.log', 
+                        format='%(asctime)s - %(message)s',
+                        level=logging.INFO)
+
     if len(mat_func) > 0:
         annot_only = True
         print(colored('using custom camera function', 'yellow'))
+        logging.info('using custom camera function')
     else:
         annot_only = False
 
@@ -149,9 +155,11 @@ def main():
     if os.path.exists(os.path.join(folder_path, 'masks')):
         use_mask = True
         print(colored('found mask', 'yellow'))
+        logging.info('using mask')
     else:
         use_mask = False
         print(colored('proceeding without mask', 'yellow'))
+        logging.info('mask not found, will not be used')
 
     # search for camera & scene number
     annot = {}
@@ -159,6 +167,7 @@ def main():
     ims = []  # list of lists of paths, first scene then camera
     # ! mask will not be added to annotation, instead replace path name when in use
     # ! however to reconstruct with colmap we still need to load mask
+    logging.info('creating image path annotation')
     if cs:
         dir_list = [name for name in os.listdir(os.path.join(folder_path, 'images')) if '.' not in name]
         dir_list = sorted(dir_list)
@@ -194,15 +203,18 @@ def main():
             ims.append({'ims': []})
             for j in range(camera_count):  # for each camera
                 ims[i]['ims'].append(os.path.join('images', dir_list[i], img_list[j]))
+    logging.info('image path annotation complete')
 
     annot['ims'] = ims
     print(colored(f'found {camera_count} cameras, {img_cnt} scenes', 'yellow'))
+    logging.info(f'found {camera_count} cameras, {img_cnt} scenes')
 
     if not debug and not annot_only and not cfg.skip_copy:
 
         # create colmap image folder
         if os.path.exists('tmp'):
             shutil.rmtree('tmp')
+            logging.info('removed tmp folder')
         os.makedirs('tmp')
 
         print(colored('copying scenes', 'yellow'))
@@ -222,14 +234,15 @@ def main():
     t = []  # scene * camera * [3, 1]
     D = np.zeros((5, 1))
 
-    if not debug and not annot_only:
+    if not debug and not annot_only and cfg.begin_scene == 0:
         if os.path.exists('colmap'):
             shutil.rmtree('colmap')
+            logging.info('removed colmap database folder')
         os.makedirs('colmap')
 
     # colmap reconstruct
     for i in range(img_cnt):  # for each scene
-
+        logging.info(f'starting scene {i:06d}')
         output_path = 'colmap' + f'/{i:06d}'
         image_dir = os.path.join('tmp', f'{i:06d}')
         if not debug and not annot_only:
@@ -238,23 +251,35 @@ def main():
             os.makedirs(output_path)
         # mvs_path = output_path + '/mvs'
         database_path = output_path + '/database.db'
-        if not debug and not annot_only:
+        if not debug and not annot_only and i >= cfg.begin_scene:
+            logging.info(f'\tstarting recontruction')
             pycolmap.extract_features(database_path, image_dir)
             pycolmap.match_exhaustive(database_path)
             maps = pycolmap.incremental_mapping(database_path, image_dir, output_path)
             maps[0].write(output_path)
-        print(colored(f'reconstruction complete for scene {i}', 'green'))
+            print(colored(f'reconstruction complete for scene {i}', 'green'))
+            logging.info(f'\treconstruction complete')
         # load reconstruction
-        if not annot_only:
-            reconstruction = pycolmap.Reconstruction(output_path)
-            print(reconstruction.summary())
-            if not os.path.exists('result'):
-                os.makedirs('result')
-            reconstruction.export_PLY('result' + f'/mesh_raw_{i:06d}.ply')
-            reconstruction.write_text(output_path)
-            # post proc
-            exts = colmap_images_to_exts(output_path + '/images.txt', camera_count)
-            ixts = colmap_cameras_to_ixts(output_path + '/cameras.txt', camera_count)
+        try:
+            logging.info(f'\tstarting camera extraction')
+            if not annot_only:
+                reconstruction = pycolmap.Reconstruction(output_path)
+                print(reconstruction.summary())
+                if not os.path.exists('result'):
+                    os.makedirs('result')
+                reconstruction.export_PLY('result' + f'/mesh_raw_{i:06d}.ply')
+                reconstruction.write_text(output_path)
+                # post proc
+                exts = colmap_images_to_exts(output_path + '/images.txt', camera_count)
+                ixts = colmap_cameras_to_ixts(output_path + '/cameras.txt', camera_count)
+        except:
+            print(colored('reconstruction failed, restarting', 'red'))
+            logging.exception('\tcamera extraction failed, restarting')
+            i -= 1
+            continue
+        
+        print(colored('camera paramters extraction success', 'green'))
+        logging.info('\tcamera extraction complete')
 
         if i != 0:
             continue
@@ -280,15 +305,20 @@ def main():
         annot['cams'] = {'K': k, 'R': r, 'T': t, 'D': D}
         np.save('result/annot.npy', annot)
         print(colored('annotation has been saved to "result/annot.npy"', 'green'))
+        logging.info('\tannotation has been saved')
     if not annot_only:
         print(colored(f'meshes have been saved to "result/"', 'green'))
+        logging.info('all meshes are saved')
     if clean_pts:
         if use_mask:
+            logging.info('cleaning pointclouds')
             clean_point_cloud(folder_path, annot)
+            logging.info('pointclouds cleaning complete')
         else:
             raise ValueError('setting clean_pts to True without masks')
     if not annot_only:
         _random_demo(folder_path, camera_count, img_cnt, annot, cleaned=clean_pts)
+    logging.info('all complete')
 
 
 if __name__ == '__main__':
