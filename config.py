@@ -22,7 +22,7 @@ cfg.render_only = False
 
 # the path to the .py file that contains the function
 # "ret_mat(cam: >= 0 int) -> 3*7 [k, r, t]",
-# ! reconstruction will not be called if this is not None
+# reconstruction will not be called if this is not None
 cfg.mat_func = ''
 
 # skip copy only if the files in tmp
@@ -31,3 +31,8 @@ cfg.skip_copy = True
 
 # select the scene to begin reconstruction with
 cfg.begin_scene = 0
+
+# strict centering, might 
+# accidentally over-prune point cloud
+# if set this to False
+cfg.strict_center = False

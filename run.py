@@ -7,9 +7,93 @@ from termcolor import colored
 import pycolmap
 import shutil
 from config import cfg
-import sys
 import logging
 import time
+
+
+class Est:
+    def __init__(self, total):
+        self.total = total
+        self.ing = False
+        self.timing = []
+    
+    def start(self):
+        if self.ing:
+            raise Exception('already timing')
+        self.ing = True
+        self.begin = time.time()
+
+    def stop(self):
+        if not self.ing:
+            raise Exception('timer hasn\'t started')
+        self.ing = False
+        self.lastest_stop = time.time()
+        self.timing.append(self.lastest_stop - self.begin)
+
+    def est(self) -> str:
+        count = len(self.timing)
+        if count == 0:
+            return 'inf'
+        avg = 0
+        for i in self.timing:
+            avg += i
+        avg /= count
+        est = avg * (self.total - count) - time.time() + self.lastest_stop
+        if est < 60:
+            return f'{est:.2f} seconds'
+        elif est < 3600:
+            return f'{int(est / 60)} minutes and {int((est % 60))} seconds'
+        elif est < 86400:
+            return f'{int(est / 3600)} hours and {int((est % 3600) / 60)} minutes'
+        else:
+            return f'{int(est / 86400)} days'
+
+
+def transform_point_cloud(file, r, t):
+    pc = o3d.io.read_point_cloud(file)
+    pc = np.asarray(pc.points)
+    pc_new = pc @ r.T + t
+    point_cloud = o3d.geometry.PointCloud()
+    point_cloud.points = o3d.utility.Vector3dVector(pc_new)
+    o3d.io.write_point_cloud(file.replace('raw', 'transform'), point_cloud)
+    return
+
+
+# finding the rotation and translation
+# matrix between the point cloud and
+# the one in the first frame to
+# match coordinate
+def get_rot_trans(
+        tar: np.ndarray, 
+        src: np.ndarray
+) -> np.ndarray:
+    # they are both N*3 matrices with same N
+    center_tar = np.average(tar, axis=0)
+    center_src = np.average(src, axis=0)
+
+    r_src = src - center_src
+    r_tar = tar - center_tar
+
+    r = np.linalg.lstsq(r_src, r_tar, rcond=None)[0]
+    t = tar - src @ r
+
+    return r.T, t[0]
+
+
+def get_point_transform(
+        ext0: np.ndarray,  # [N, 3, 4]
+        extn: np.ndarray,  # [N, 3, 4]
+) -> np.ndarray:
+    
+    r0 = ext0[:, :3, :3]
+    t0 = ext0[:, :3, 3:]
+    rn = extn[:, :3, :3]
+    tn = extn[:, :3, 3:]
+
+    pts0 = -np.transpose(r0, [0, 2, 1]) @ t0
+    ptsn = -np.transpose(rn, [0, 2, 1]) @ tn
+
+    return get_rot_trans(pts0[..., 0], ptsn[..., 0])
 
 
 def clip(value: any, lower: any, upper: any) -> any:
@@ -19,14 +103,6 @@ def clip(value: any, lower: any, upper: any) -> any:
         return upper
     else:
         return value
-    
-# Disable
-def disable_print():
-    sys.stdout = open(os.devnull, 'w')
-
-# Restore
-def enable_print():
-    sys.stdout = sys.__stdout__
 
 
 def clean_point_cloud(
@@ -50,10 +126,13 @@ def clean_point_cloud(
             img_path = os.path.join(folder_path, ims_annot[i]['ims'][j])
             msk = cv2.imread(img_path.replace('images', 'masks'), cv2.IMREAD_GRAYSCALE)
             H, W = msk.shape[0], msk.shape[1]
-            if msk[:, [0, W - 1]].any() or msk[[0, H - 1], :].any():
-                raise ValueError('the object must be in the center of every image')
 
-        pts = o3d.io.read_point_cloud(f'result/mesh_raw_{i:06d}.ply')
+            if cfg.strict_center:
+                if msk[:, [0, W - 1]].any() or msk[[0, H - 1], :].any():
+                    raise ValueError('the object must be in the center of every image, ' + \
+                                    f'error found in scene {i} cam {j}')
+
+        pts = o3d.io.read_point_cloud(f'result/mesh_transform/transform_{i:06d}.ply')
         pts = np.asarray(pts.points)
 
         # when the cast of a point is outside the mask, delete it from point cloud
@@ -94,7 +173,9 @@ def clean_point_cloud(
         # add points
         point_cloud.points = o3d.utility.Vector3dVector(pts)
         # write point cloud
-        o3d.io.write_point_cloud(f'result/mesh_cleaned_{i:06d}.ply', point_cloud)
+        if not os.path.exists('result/mesh_cleaned'):
+            os.mkdir('result/mesh_cleaned')
+        o3d.io.write_point_cloud(f'result/mesh_cleaned/cleaned_{i:06d}.ply', point_cloud)
     return
 
 
@@ -104,19 +185,18 @@ def _random_demo(
         scene_num: int,
         annot: list,
         round: int=10,
-        delay: int=1000,
         cleaned: bool=False
 ) -> None:
-    for _ in range(round):
+    for i in range(round):
         cam = np.random.randint(0, camera_num)
         scene = np.random.randint(0, scene_num)
         img_path = annot['ims'][scene]['ims'][cam]
         img_path = os.path.join(folder_path, img_path)
         img_og = cv2.imread(img_path)
         if cleaned:
-            ply_str = f'result/mesh_cleaned_{scene:06d}.ply'
+            ply_str = f'result/mesh_cleaned/cleaned_{scene:06d}.ply'
         else:
-            ply_str = f'result/mesh_raw_{scene:06d}.ply'
+            ply_str = f'result/mesh_transform/transform_{scene:06d}.ply'
         img = rpc.render_point_cloud(annot['cams']['K'][cam],
                                      annot['cams']['R'][cam],
                                      annot['cams']['T'][cam],
@@ -124,8 +204,13 @@ def _random_demo(
                                      img_og.shape[0], img_og.shape[1],
                                      radius=2)
         display = np.concatenate([img_og, img], axis=1)
-        cv2.imshow('sanity check', display)
-        cv2.waitKey(delay)
+        display = cv2.putText(display, f'scene {scene} cam {cam}', [5, 25], 
+                              fontFace=cv2.FONT_HERSHEY_COMPLEX,
+                              fontScale=1,
+                              color=[255,255,255])
+        if not os.path.exists('result/demo'):
+            os.mkdir('result/demo')
+        cv2.imwrite(f'result/demo/{i:04d}.jpg', display)
     return
 
 
@@ -244,9 +329,12 @@ def main():
             logging.info('removed colmap database folder')
         os.makedirs('colmap')
 
+    est = Est(img_cnt)  # create time estimator
+
     # colmap reconstruct
     for i in range(img_cnt):  # for each scene
         logging.info(f'starting scene {i:06d}')
+        est.start()
         output_path = 'colmap' + f'/{i:06d}'
         image_dir = os.path.join('tmp', f'{i:06d}')
         if not debug and not annot_only and i >= cfg.begin_scene:
@@ -255,7 +343,9 @@ def main():
             os.makedirs(output_path)
         # mvs_path = output_path + '/mvs'
         database_path = output_path + '/database.db'
-        while True:
+        count = 0
+        while count < 5:
+            count += 1
             if not debug and not annot_only and i >= cfg.begin_scene:
                 logging.info(f'\tstarting recontruction')
                 pycolmap.extract_features(database_path, image_dir)
@@ -272,7 +362,12 @@ def main():
                     print(reconstruction.summary())
                     if not os.path.exists('result'):
                         os.makedirs('result')
-                    reconstruction.export_PLY('result' + f'/mesh_raw_{i:06d}.ply')
+                    if not os.path.exists('result/mesh_raw'):
+                        os.mkdir('result/mesh_raw')
+                    if not os.path.exists('result/mesh_transform'):
+                        os.mkdir('result/mesh_transform')
+                    reconstruction.export_PLY('result' + f'/mesh_raw/raw_{i:06d}.ply')
+                    reconstruction.export_PLY('result' + f'/mesh_transform/transform_{i:06d}.ply')
                     reconstruction.write_text(output_path)
                     # post proc
                     exts = colmap_images_to_exts(output_path + '/images.txt', camera_count)
@@ -284,35 +379,45 @@ def main():
                 shutil.rmtree(output_path)
                 os.makedirs(output_path)
                 continue
+
+        if count == 5:
+            logging.info('\tmaximum fail reached')
+            raise RuntimeError('too many failed construction')
         
         print(colored('camera paramters extraction success', 'green'))
         logging.info('\tcamera extraction complete')
 
-        if i != 0:
-            continue
-        
-        for j in range(camera_count):
-            if not annot_only:
-                r.append(exts[j, :3, :3])
-                t.append(exts[j, :3, 3:])
-                k.append(ixts[j])
-            else:
-                if mat_func[-3:] == '.py':
-                    mat_func = mat_func[:-3]
-                try:
-                    ret_mat = __import__(mat_func).ret_mat
-                except:
-                    raise ImportError('ret_mat function is not found')
-                krt = ret_mat(j)
-                assert isinstance(krt, np.ndarray), 'return type of ret_mat must be numpy.ndarray'
-                assert krt.shape == (3, 7), 'shape of ret_mat return must be [3, 7]'
-                r.append(krt[:3, 3:6])
-                t.append(krt[:3, 6:])
-                k.append(krt[:3, :3])
-        annot['cams'] = {'K': k, 'R': r, 'T': t, 'D': D}
-        np.save('result/annot.npy', annot)
-        print(colored('annotation has been saved to "result/annot.npy"', 'green'))
-        logging.info('\tannotation has been saved')
+        if i == 0:
+            ext0 = exts
+            for j in range(camera_count):
+                if not annot_only:
+                    r.append(exts[j, :3, :3])
+                    t.append(exts[j, :3, 3:])
+                    k.append(ixts[j])
+                else:
+                    if mat_func[-3:] == '.py':
+                        mat_func = mat_func[:-3]
+                    try:
+                        ret_mat = __import__(mat_func).ret_mat
+                    except:
+                        raise ImportError('ret_mat function is not found')
+                    krt = ret_mat(j)
+                    assert isinstance(krt, np.ndarray), 'return type of ret_mat must be numpy.ndarray'
+                    assert krt.shape == (3, 7), 'shape of ret_mat return must be [3, 7]'
+                    r.append(krt[:3, 3:6])
+                    t.append(krt[:3, 6:])
+                    k.append(krt[:3, :3])
+            annot['cams'] = {'K': k, 'R': r, 'T': t, 'D': D}
+            np.save('result/annot.npy', annot)
+            print(colored('annotation has been saved to "result/annot.npy"', 'green'))
+            logging.info('annotation has been saved')
+        else:  # move point cloud to match coordinate in first frame
+            rn, tn = get_point_transform(ext0, exts)
+            transform_point_cloud(f'result/mesh_raw/raw_{i:06d}.ply', rn, tn)
+
+        est.stop()
+        logging.info('\ttime left: ' + est.est())
+
     if not annot_only:
         print(colored(f'meshes have been saved to "result/"', 'green'))
         logging.info('all meshes are saved')
