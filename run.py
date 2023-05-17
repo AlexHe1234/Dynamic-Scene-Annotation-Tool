@@ -9,6 +9,7 @@ import shutil
 from config import cfg
 import sys
 import logging
+import time
 
 
 def clip(value: any, lower: any, upper: any) -> any:
@@ -136,7 +137,9 @@ def main():
     mat_func = cfg.mat_func
     clean_pts = cfg.clean_pts
 
-    logging.basicConfig(filename='result/.log', 
+    if not os.path.exists('log'):
+        os.mkdir('log')
+    logging.basicConfig(filename=f'log/{time.asctime()}.log', 
                         format='%(asctime)s - %(message)s',
                         level=logging.INFO)
     logging.info('start')
@@ -246,7 +249,7 @@ def main():
         logging.info(f'starting scene {i:06d}')
         output_path = 'colmap' + f'/{i:06d}'
         image_dir = os.path.join('tmp', f'{i:06d}')
-        if not debug and not annot_only:
+        if not debug and not annot_only and i >= cfg.begin_scene:
             if os.path.exists(output_path):
                 shutil.rmtree(output_path)
             os.makedirs(output_path)
@@ -278,6 +281,7 @@ def main():
             except:
                 print(colored('camera extraction failed, restarting', 'red'))
                 logging.info('\tcamera extraction failed, restarting')
+                shutil.rmtree(output_path)
                 continue
         
         print(colored('camera paramters extraction success', 'green'))
