@@ -1,8 +1,12 @@
 # Dynamic Scene Annotation Tool
 ## Introduction
-This is a series of tools combined in one to accelerate dataset processing in dynamic 3d vision tasks. Under the assumption that a dynamic scene is captured by multiple cameras at fixed position over a series of frame time. Given a set of images from different frames, this program will output their corresponding ext, ixt, image/mask paths (combined in certain annotation format), pointcloud (automatically cleaned), and display a simple render result to provide sanity check. 
+This is a series of tools combined in one to accelerate dataset processing in dynamic 3d vision tasks. Under the assumption that a dynamic scene is captured by multiple cameras at fixed position over a series of frame time. Given a set of images from different frames, this program will output their corresponding ext, ixt, image/mask paths (combined in certain annotation format), pointcloud (automatically cleaned), and display a simple render result to provide sanity check.
+## What to expect
+1. Automatically creates annotations including image paths, camera matrices (both intrinsic and extrinsic).
+2. Automatically calls `colmap` for per-scene reconstruction and match coordinates between all scenes.
+3. Prunes resulting point cloud according to masks.
 ## Before Using
-To be able to use this program, you have to make sure the images (and masks if there are any) in the following way:
+To be able to use this program, you need to have [colmap](https://github.com/colmap/colmap) correctly installed and within your `PATH`, you also have to make sure the images (and masks if there are any) are placed in the following way:
 1. all images (and masks) must be
 .jpg or .png format, and images must have 3 channels (uint8) while masks have 1 channel (uint8).
 2. images must be in one of the following arrangements (the naming must be an integer of same digits, but does not require to be 4 or 5, as in this example):
