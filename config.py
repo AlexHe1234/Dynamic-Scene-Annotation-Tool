@@ -30,9 +30,12 @@ cfg.mat_func = ''
 cfg.skip_copy = True
 
 # select the scene to begin reconstruction with
-cfg.begin_scene = 0
+cfg.begin_scene = 2
 
 # strict centering, might 
 # accidentally over-prune point cloud
 # if set this to False
 cfg.strict_center = False
+
+# maximum fail try
+cfg.fail_max = 7

@@ -1,7 +1,3 @@
-from lib.general_import import *
-import lib.render_point_cloud as rpc
-from lib.colmap_txt_to_camera import colmap_images_to_exts
-from lib.colmap_txt_to_camera import colmap_cameras_to_ixts
 import os
 from termcolor import colored
 import pycolmap
@@ -9,6 +5,137 @@ import shutil
 from config import cfg
 import logging
 import time
+import numpy as np
+import open3d as o3d
+import cv2
+from tqdm import tqdm
+
+
+def render_point_cloud(
+        k: np.ndarray, 
+        r: np.ndarray,
+        t: np.ndarray,
+        pointcloud: str,
+        height: int,
+        width: int,
+        radius: int=1
+    ) -> np.ndarray:
+    
+    color = [[255, 0, 0],
+             [0, 255, 255],
+             [0, 0, 255],
+             [255, 0, 255],
+             [255, 255, 255],
+             [0, 255, 0],
+             [255, 255, 0]]
+
+    if isinstance(pointcloud, str):
+        if '.ply' in pointcloud:
+            mesh = o3d.io.read_point_cloud(pointcloud)
+            pts = np.asarray(mesh.points)
+        elif '.npy' in pointcloud:
+            pts = np.load(pointcloud)
+            if not (len(pts.shape) == 2 and pts.shape[1] == 3):
+                raise IndexError
+        else:
+            raise NotImplementedError
+    elif isinstance(pointcloud, np.ndarray):
+        assert pointcloud.shape[1] == 3, 'Point cloud needs to be [N, 3] in shape'
+        pts = pointcloud
+    else:
+        raise NotImplementedError
+
+    t = t.reshape(3, 1)
+    coord_cam = r.dot(pts.T) + t
+    coord_img = k.dot(coord_cam)
+    coord_img /= coord_img[2, :]
+    pixels = coord_img[:2, :].T
+    
+    img = np.zeros((height, width, 3))
+    
+    for i in range(pixels.shape[0]):
+        pixel = pixels[i]
+        if not (0 <= pixel[1] < width and 0 <= pixel[0] < height):
+            continue
+        img = cv2.circle(img, [int(pixel[0]), int(pixel[1])], radius, color=color[i % 7], thickness=2*radius)
+    return img.astype(np.uint8)
+
+
+def colmap_cameras_to_ixts(
+    cameras_path: str,
+    camera_num: int
+) -> np.ndarray:
+    ixts = np.zeros((camera_num, 3, 3))
+    file = open(cameras_path, 'r')
+    for i in range(3):
+        _ = file.readline()
+    for i in range(camera_num):
+        line = file.readline().split()
+        idx = int(line[0]) - 1
+        f = float(line[4])
+        w = float(line[5])
+        h = float(line[6])
+        ixts[idx, 0, 0] = ixts[idx, 1, 1] = f
+        ixts[idx, 0, 2] = w
+        ixts[idx, 1, 2] = h
+        ixts[idx, 2, 2] = 1.
+    return ixts
+
+
+def quad2rot(quad: np.ndarray) -> np.ndarray:
+    q0, q1, q2, q3 = quad[0], quad[1], quad[2], quad[3]
+    r = np.zeros((3, 3))
+    r[0, 0] = 1-2*(q2**2)-2*(q3**2)
+    r[0, 1] = 2*q1*q2-2*q0*q3
+    r[0, 2] = 2*(q1*q3+q0*q2)
+    r[1, 0] = 2*(q1*q2+q0*q3)
+    r[1, 1] = 1-2*(q1**2)-2*(q3**2)
+    r[1, 2] = 2*(q2*q3-q0*q1)
+    r[2, 0] = 2*(q1*q3-q0*q2)
+    r[2, 1] = 2*(q2*q3+q0*q1)
+    r[2, 2] = 1-2*(q1**2)-2*(q2**2)
+    return r
+
+
+def colmap_images_to_exts(
+    images_path: str,
+    image_num: int
+) -> np.ndarray:
+    """given images.txt from colmap
+    extract extrinsic matices as [N, 3, 4] ndarray
+    images that are fed into colmap have to be
+    named in purely numerical string like 0087.jpg or 34.jpg
+
+    Args:
+        images_path (str): path to the images.txt file that colmap outputs
+        image_num (int): number of the total images
+
+    Returns:
+        np.ndarray: extrinsic matrices in [N, 3, 4]
+    """
+    
+    a = open(images_path)
+    exts = np.zeros((image_num, 3, 4))
+    quads = np.zeros(4)
+    trans = np.zeros(3)
+    for _ in range(4):
+        _ = a.readline()
+    for _ in range(image_num):
+        line1 = a.readline().split()
+        quads[0] = float(line1[1])
+        quads[1] = float(line1[2])
+        quads[2] = float(line1[3])
+        quads[3] = float(line1[4])
+        trans[0] = float(line1[5])
+        trans[1] = float(line1[6])
+        trans[2] = float(line1[7])
+        j = int(line1[9].split('/')[-1][:-4])
+        # print(line1[0], f'{i + 1}')
+        # assert line1[0] == f'{i + 1}', 'The colmap file format is not support or corrupted'
+        exts[j, :3, :3] = quad2rot(quads)
+        exts[j, :3, 3] = trans
+        a.readline()
+    return exts
 
 
 class Est:
@@ -197,7 +324,7 @@ def _random_demo(
             ply_str = f'result/mesh_cleaned/cleaned_{scene:06d}.ply'
         else:
             ply_str = f'result/mesh_transform/transform_{scene:06d}.ply'
-        img = rpc.render_point_cloud(annot['cams']['K'][cam],
+        img = render_point_cloud(annot['cams']['K'][cam],
                                      annot['cams']['R'][cam],
                                      annot['cams']['T'][cam],
                                      ply_str,
@@ -344,7 +471,7 @@ def main():
         # mvs_path = output_path + '/mvs'
         database_path = output_path + '/database.db'
         count = 0
-        while count < 5:
+        while count < cfg.fail_max:
             count += 1
             if not debug and not annot_only and i >= cfg.begin_scene:
                 logging.info(f'\tstarting recontruction')
@@ -380,7 +507,7 @@ def main():
                 os.makedirs(output_path)
                 continue
 
-        if count == 5:
+        if count == cfg.fail_max:
             logging.info('\tmaximum fail reached')
             raise RuntimeError('too many failed construction')
         
@@ -410,7 +537,7 @@ def main():
             annot['cams'] = {'K': k, 'R': r, 'T': t, 'D': D}
             np.save('result/annot.npy', annot)
             print(colored('annotation has been saved to "result/annot.npy"', 'green'))
-            logging.info('annotation has been saved')
+            logging.info('\tannotation has been saved')
         else:  # move point cloud to match coordinate in first frame
             rn, tn = get_point_transform(ext0, exts)
             transform_point_cloud(f'result/mesh_raw/raw_{i:06d}.ply', rn, tn)
