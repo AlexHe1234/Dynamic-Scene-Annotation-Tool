@@ -338,38 +338,40 @@ def clean_point_cloud(
     return
 
 
+# TODO demo according to each scene, and change the caller format
 def _random_demo(
         folder_path: str,
         camera_num: int,
         scene_num: int,
         annot: list,
-        round: int=10,
+        round_per_scene: int=10,
         cleaned: bool=False
 ) -> None:
-    for i in range(round):
-        cam = np.random.randint(0, camera_num)
-        scene = np.random.randint(0, scene_num)
-        img_path = annot['ims'][scene]['ims'][cam]
-        img_path = os.path.join(folder_path, img_path)
-        img_og = cv2.imread(img_path)
-        if cleaned:
-            ply_str = f'result/mesh_cleaned/cleaned_{scene:06d}.ply'
-        else:
-            ply_str = f'result/mesh_transform/transform_{scene:06d}.ply'
-        img = render_point_cloud(annot['cams']['K'][cam],
-                                     annot['cams']['R'][cam],
-                                     annot['cams']['T'][cam],
-                                     ply_str,
-                                     img_og.shape[0], img_og.shape[1],
-                                     radius=2)
-        display = np.concatenate([img_og, img], axis=1)
-        display = cv2.putText(display, f'scene {scene} cam {cam}', [5, 25], 
-                              fontFace=cv2.FONT_HERSHEY_COMPLEX,
-                              fontScale=1,
-                              color=[255,255,255])
-        if not os.path.exists('result/demo'):
-            os.mkdir('result/demo')
-        cv2.imwrite(f'result/demo/{i:04d}.jpg', display)
+    for j in range(scene_num):
+        for i in range(round_per_scene):
+            cam = np.random.randint(0, camera_num)
+            scene = j
+            img_path = annot['ims'][scene]['ims'][cam]
+            img_path = os.path.join(folder_path, img_path)
+            img_og = cv2.imread(img_path)
+            if cleaned:
+                ply_str = f'result/mesh_cleaned/cleaned_{scene:06d}.ply'
+            else:
+                ply_str = f'result/mesh_transform/transform_{scene:06d}.ply'
+            img = render_point_cloud(annot['cams']['K'][cam],
+                                        annot['cams']['R'][cam],
+                                        annot['cams']['T'][cam],
+                                        ply_str,
+                                        img_og.shape[0], img_og.shape[1],
+                                        radius=2)
+            display = np.concatenate([img_og, img], axis=1)
+            display = cv2.putText(display, f'scene {scene} cam {cam}', [5, 25], 
+                                fontFace=cv2.FONT_HERSHEY_COMPLEX,
+                                fontScale=1,
+                                color=[255,255,255])
+            if not os.path.exists('result/demo'):
+                os.mkdir('result/demo')
+            cv2.imwrite(f'result/demo/scene_{j:04d}_cam_{i:04d}.jpg', display)
     return
 
 
@@ -481,6 +483,7 @@ def main():
     k = []  # scene * camera * [3, 3]
     r = []  # scene * camera * [3, 3]
     t = []  # scene * camera * [3, 1]
+    d = []
     D = np.zeros((5, 1))
 
     if not debug and not annot_only and (cfg.begin_scene == 0):
@@ -558,6 +561,7 @@ def main():
                     r.append(exts[j, :3, :3])
                     t.append(exts[j, :3, 3:])
                     k.append(ixts[j])
+                    d.append(D)
                 else:
                     if mat_func[-3:] == '.py':
                         mat_func = mat_func[:-3]
@@ -571,9 +575,10 @@ def main():
                     r.append(krt[:3, 3:6])
                     t.append(krt[:3, 6:])
                     k.append(krt[:3, :3])
-            annot['cams'] = {'K': k, 'R': r, 'T': t, 'D': D}
-            np.save('result/annot.npy', annot)
-            print(colored('annotation has been saved to "result/annot.npy"', 'green'))
+                    d.append(D)
+            annot['cams'] = {'K': k, 'R': r, 'T': t, 'D': d}
+            np.save('result/annots.npy', annot)
+            print(colored('annotation has been saved to "result/annots.npy"', 'green'))
             logging.info('\tannotation has been saved')
         else:  # move point cloud to match coordinate in first frame
             rn, tn = get_point_transform(ext0[index], exts)
