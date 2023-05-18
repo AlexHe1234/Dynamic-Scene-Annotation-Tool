@@ -9,6 +9,7 @@ import numpy as np
 import open3d as o3d
 import cv2
 from tqdm import tqdm
+import datetime
 
 
 def render_point_cloud(
@@ -382,7 +383,8 @@ def main():
 
     if not os.path.exists('log'):
         os.mkdir('log')
-    logging.basicConfig(filename=f'log/{time.asctime()}.log', 
+
+    logging.basicConfig(filename=f'log/{datetime.datetime.now().strftime("%m %d %Y %H:%M:%S")}.log', 
                         format='%(asctime)s - %(message)s',
                         level=logging.INFO)
     logging.info('start')

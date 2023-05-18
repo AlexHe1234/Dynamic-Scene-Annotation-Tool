@@ -4,7 +4,7 @@ from yacs.config import CfgNode as CN
 cfg = CN()
 
 # main folder directory that includes images/ (and optionally masks/)
-cfg.folder = '/home/idarc/hgz/datasets/test/lego_dynamic'
+cfg.folder = '/home/idarc/hgz/datasets/blender/lego_dynamic'
 
 # default cs, if sc set False
 cfg.cs = True
@@ -13,7 +13,7 @@ cfg.cs = True
 # when setting this to True,
 # masks folder must be represent
 # this does not contradict with reconstruction
-cfg.clean_pts = True
+cfg.clean_pts = False
 
 # generate annotation and render sanity check without reconstruction,
 # based on previously reconstructed results,
@@ -38,4 +38,4 @@ cfg.begin_scene = 0
 cfg.strict_center = False
 
 # maximum fail try
-cfg.fail_max = 7
+cfg.fail_max = 5
