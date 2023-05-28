@@ -272,18 +272,17 @@ def clean_point_cloud(
     ims_annot = annot['ims']
     cam_annot = annot['cams']
     # check center
-    scene_count = len(ims_annot)
-    assert scene_count > 0
     cam_count = len(ims_annot[0]['ims'])
     assert cam_count > 0
 
     print(colored('cleaning point cloud...', 'green'))
-    for i in range(scene_count):
+    for i in cfg.scene_range:
         print(f'scene {i}:')
         # make sure this scene is calculatable
         for j in range(cam_count):
             img_path = os.path.join(folder_path, ims_annot[i]['ims'][j])
             msk = cv2.imread(img_path.replace('images', 'masks'), cv2.IMREAD_GRAYSCALE)
+            
             H, W = msk.shape[0], msk.shape[1]
 
             if cfg.strict_center:
@@ -308,6 +307,7 @@ def clean_point_cloud(
 
             img_path = os.path.join(folder_path, ims_annot[i]['ims'][j])
             msk = cv2.imread(img_path.replace('images', 'masks'), cv2.IMREAD_GRAYSCALE)
+
             H, W = msk.shape[0], msk.shape[1]
 
             erase = []
@@ -338,26 +338,23 @@ def clean_point_cloud(
     return
 
 
-# TODO demo according to each scene, and change the caller format
 def _random_demo(
         folder_path: str,
         camera_num: int,
-        scene_num: int,
         annot: list,
         round_per_scene: int=10,
         cleaned: bool=False
 ) -> None:
-    for j in range(scene_num):
+    for j in cfg.scene_range:
         for i in range(round_per_scene):
             cam = np.random.randint(0, camera_num)
-            scene = j
-            img_path = annot['ims'][scene]['ims'][cam]
+            img_path = annot['ims'][j]['ims'][cam]
             img_path = os.path.join(folder_path, img_path)
             img_og = cv2.imread(img_path)
             if cleaned:
-                ply_str = f'result/mesh_cleaned/cleaned_{scene:06d}.ply'
+                ply_str = f'result/mesh_cleaned/cleaned_{j:06d}.ply'
             else:
-                ply_str = f'result/mesh_transform/transform_{scene:06d}.ply'
+                ply_str = f'result/mesh_transform/transform_{j:06d}.ply'
             img = render_point_cloud(annot['cams']['K'][cam],
                                         annot['cams']['R'][cam],
                                         annot['cams']['T'][cam],
@@ -365,7 +362,7 @@ def _random_demo(
                                         img_og.shape[0], img_og.shape[1],
                                         radius=2)
             display = np.concatenate([img_og, img], axis=1)
-            display = cv2.putText(display, f'scene {scene} cam {cam}', [5, 25], 
+            display = cv2.putText(display, f'scene {j} cam {cam}', [5, 25], 
                                 fontFace=cv2.FONT_HERSHEY_COMPLEX,
                                 fontScale=1,
                                 color=[255,255,255])
@@ -382,6 +379,8 @@ def main():
     debug = cfg.render_only
     mat_func = cfg.mat_func
     clean_pts = cfg.clean_pts
+
+    assert len(cfg.scene_range) > 0, 'there must be as least one scene'
 
     if not os.path.exists('log'):
         os.mkdir('log')
@@ -469,7 +468,7 @@ def main():
         os.makedirs('tmp')
 
         print(colored('copying scenes', 'yellow'))
-        for i in tqdm(range(img_cnt)):  # for each scene
+        for i in tqdm(cfg.scene_range):  # for each scene
             os.makedirs(f'tmp/{i:06d}')
             for j in range(camera_count):  # for each camera
                 # os.symlink(os.path.join(folder_path, ims[i][j]), f'tmp/{i:06d}/{j:06d}.jpg')
@@ -486,30 +485,32 @@ def main():
     d = []
     D = np.zeros((5, 1))
 
-    if not debug and not annot_only and (cfg.begin_scene == 0):
+    if not debug and not annot_only and (cfg.scene_range[0] == 0):
         if os.path.exists('colmap'):
             shutil.rmtree('colmap')
             logging.info('removed colmap database folder')
         os.makedirs('colmap')
 
-    est = Est(img_cnt)  # create time estimator
-
+    est = Est(len(cfg.scene_range))  # create time estimator
+    if not debug and not annot_only:
+        logging.info('recontructing scenes')
     # colmap reconstruct
-    for i in range(img_cnt):  # for each scene
+    for i in cfg.scene_range:  # for each scene
         logging.info(f'starting scene {i:06d}')
         est.start()
         output_path = 'colmap' + f'/{i:06d}'
         image_dir = os.path.join('tmp', f'{i:06d}')
-        if not debug and not annot_only and i >= cfg.begin_scene:
+        if not debug and not annot_only and (i in cfg.scene_range):
             if os.path.exists(output_path):
                 shutil.rmtree(output_path)
             os.makedirs(output_path)
         # mvs_path = output_path + '/mvs'
         database_path = output_path + '/database.db'
         count = 0
+        # invalid for annot_only
         while count < cfg.fail_max:
             count += 1
-            if not debug and not annot_only and i >= cfg.begin_scene:
+            if not debug and not annot_only:
                 logging.info(f'\tstarting recontruction')
                 pycolmap.extract_features(database_path, image_dir)
                 pycolmap.match_exhaustive(database_path)
@@ -533,7 +534,7 @@ def main():
                     reconstruction.export_PLY('result' + f'/mesh_transform/transform_{i:06d}.ply')
                     reconstruction.write_text(output_path)
                     # post proc
-                    if i == 0:
+                    if i == cfg.scene_range[0]:
                         exts = colmap_images_to_exts(output_path + '/images.txt', camera_count)
                         ixts = colmap_cameras_to_ixts(output_path + '/cameras.txt', camera_count)
                     else:
@@ -554,8 +555,9 @@ def main():
         print(colored('camera paramters extraction success', 'green'))
         logging.info('\tcamera extraction complete')
 
-        if i == 0:
-            ext0 = exts
+        if i == cfg.scene_range[0]:
+            if not annot_only:
+                ext0 = exts
             for j in range(camera_count):
                 if not annot_only:
                     r.append(exts[j, :3, :3])
@@ -581,8 +583,9 @@ def main():
             print(colored('annotation has been saved to "result/annots.npy"', 'green'))
             logging.info('\tannotation has been saved')
         else:  # move point cloud to match coordinate in first frame
-            rn, tn = get_point_transform(ext0[index], exts)
-            transform_point_cloud(f'result/mesh_raw/raw_{i:06d}.ply', rn, tn)
+            if not annot_only:
+                rn, tn = get_point_transform(ext0[index], exts)
+                transform_point_cloud(f'result/mesh_raw/raw_{i:06d}.ply', rn, tn)
 
         est.stop()
         logging.info('\ttime left: ' + est.est())
@@ -590,7 +593,7 @@ def main():
     if not annot_only:
         print(colored(f'meshes have been saved to "result/"', 'green'))
         logging.info('all meshes are saved')
-    if clean_pts:
+    if clean_pts and not annot_only:
         if use_mask:
             logging.info('cleaning pointclouds')
             clean_point_cloud(folder_path, annot)
@@ -598,7 +601,7 @@ def main():
         else:
             raise ValueError('setting clean_pts to True without masks')
     if not annot_only:
-        _random_demo(folder_path, camera_count, img_cnt, annot, cleaned=clean_pts)
+        _random_demo(folder_path, camera_count, annot, cleaned=clean_pts)
     logging.info('all complete')
 
 
