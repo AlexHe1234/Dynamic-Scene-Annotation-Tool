@@ -16,9 +16,10 @@ In summary, this tool:
 ### 1.Install Requirements
 Install python requirements by running
 
-    ```
+
     pip install -r requirements.txt
-    ```
+
+    
 ### 2. Install PyCOLMAP
 To be able to use this program, you need to have [COLMAP](https://github.com/colmap/colmap) correctly installed and within your `PATH`. Compile with cuda support might provide better speed (although I was having trouble seeing that, perhaps they haven't support cuda yet on certain tasks).
 ### 3. Arrange Data Files
