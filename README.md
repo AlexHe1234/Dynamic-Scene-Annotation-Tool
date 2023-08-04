@@ -12,9 +12,15 @@ In summary, this tool:
 2. Calls `COLMAP` for per-scene reconstruction and match coordinates between all scenes.
 3. Prunes resulting point cloud according to masks.
 ## Get Started
-### 1. Install PyCOLMAP
+
+### 1.Install Requirements
+Install python requirements by running
+    ```
+    pip install -r requirements.txt
+    ```
+### 2. Install PyCOLMAP
 To be able to use this program, you need to have [COLMAP](https://github.com/colmap/colmap) correctly installed and within your `PATH`. Compile with cuda support might provide better speed (although I was having trouble seeing that, perhaps they haven't support cuda yet on certain tasks).
-### 2. Arrange Data Files
+### 3. Arrange Data Files
 you also have to make sure the images (and masks if there are any) are placed in the following way:
 1. all images (and masks) must be
 .jpg or .png format, and images must have 3 channels (uint8) while masks have 1 channel (uint8).
@@ -49,11 +55,11 @@ you also have to make sure the images (and masks if there are any) are placed in
     the first one is referred to as `cs` (camera-scene)
     while the second one as `sc` (scene-camera),
     please specify this (with default being `cs` and `False` for `sc`) in the config file.
-### 3. Sit back and Start Reconstructing
+### 4. Start Reconstruction
 1. Change the configuration settings in `config.py` for specific task.
 2. Run `run.py` without any additional arguments.
 3. The progress will be displayed in terminal and recorded in detail in log files (under log folder). It also outputs where the results are stored.
-### 4. Result
+### 5. See Results
 All results will be under 'result' folder.
 1. The resulting annotation file `annots.npy` can be loaded using
     ```
