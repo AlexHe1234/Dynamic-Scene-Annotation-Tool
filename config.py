@@ -3,18 +3,20 @@ from yacs.config import CfgNode as CN
 
 cfg = CN()
 
+
 """main options"""
 
 # main folder directory that includes images/ (and optionally masks/)
-cfg.folder = '/home/idarc/hgz/datasets/dynerf/coffee_martini'
+cfg.folder = '/home/idarc/hgz/datasets/blender/lego_dynamic'
 
 # select the list of scenes to reconstruct
-cfg.scene_range = [0]
+cfg.scene_range = [0, 1, 2]
 
 # default cs, if sc set False
 # cs means scene images are under camera folders
 # sc means camera images are under scene folders
 cfg.cs = True
+
 
 """custom options"""
 
@@ -22,12 +24,12 @@ cfg.cs = True
 # when setting this to True,
 # masks folder must be represent
 # this does not contradict with reconstruction
-cfg.clean_pts = False
+cfg.clean_pts = True
 
 # generate annotation and render sanity check without reconstruction,
 # based on previously reconstructed results,
 # set this to true when reconstruction HAS been run
-cfg.render_only = False
+cfg.render_only = True
 
 # the name of the .py file that contains the function
 # must be in the same directory as "run.py"
@@ -38,11 +40,6 @@ cfg.mat_func = ''
 # skip copy only if the files in tmp
 # folder belongs to the current task
 cfg.skip_copy = False
-
-# strict centering, might 
-# accidentally over-prune point cloud
-# if set this to False
-cfg.strict_center = False
 
 # maximum fail try
 cfg.fail_max = 5
