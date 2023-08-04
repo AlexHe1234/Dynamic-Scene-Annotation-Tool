@@ -7,10 +7,10 @@ cfg = CN()
 """main options"""
 
 # main folder directory that includes images/ (and optionally masks/)
-cfg.folder = '/home/idarc/hgz/datasets/blender/lego_dynamic'
+cfg.folder = '/home/idarc/hgz/datasets/dynerf/coffee_martini'
 
 # select the list of scenes to reconstruct
-cfg.scene_range = [0, 1, 2]
+cfg.scene_range = [0]
 
 # default cs, if sc set False
 # cs means scene images are under camera folders
@@ -24,7 +24,7 @@ cfg.cs = True
 # when setting this to True,
 # masks folder must be represent
 # this does not contradict with reconstruction
-cfg.clean_pts = True
+cfg.clean_pts = False
 
 # generate annotation and render sanity check without reconstruction,
 # based on previously reconstructed results,

@@ -1,5 +1,8 @@
 # Dynamic Scene Annotation Tool
 ## Introduction
+```
+images & masks -> intrinsics & extrinsics & pointclouds 
+```
 This is a series of tools combined in one to accelerate dataset processing in dynamic 3d vision tasks using `PyCOLMAP`. Under the assumption that a dynamic scene is captured by multiple cameras at fixed positions over a series of time frames. 
 
 Given a set of images from different frames, this program will output their corresponding exts, ixts, images/masks paths (stored in single .npy file), pointclouds (automatically cleaned), and display a simple render result to provide sanity check.
