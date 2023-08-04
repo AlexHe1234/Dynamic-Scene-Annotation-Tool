@@ -97,7 +97,7 @@ All results will be under 'result' folder.
 ## Miscellaneous
 1. If you find demo results to be incorrect, simply replace `scene_range` in config file and have another go. I find that sufficient to generate plausible results for most of the scenes.
 ## Credits
-This tool uses [colmap](https://github.com/colmap/colmap) to reconstruct camera parameters as well as pointclouds.
+This tool uses [COLMAP](https://github.com/colmap/colmap) to reconstruct camera parameters as well as pointclouds.
 
 
 
