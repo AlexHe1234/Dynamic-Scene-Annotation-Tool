@@ -56,7 +56,7 @@ def render_point_cloud(
     
     for i in range(pixels.shape[0]):
         pixel = pixels[i]
-        if not (0 <= pixel[1] < width and 0 <= pixel[0] < height):
+        if not (0 <= pixel[1] < height and 0 <= pixel[0] < width):
             continue
         img = cv2.circle(img, [int(pixel[0]), int(pixel[1])], radius, color=color[i % 7], thickness=2*radius)
     return img.astype(np.uint8)
